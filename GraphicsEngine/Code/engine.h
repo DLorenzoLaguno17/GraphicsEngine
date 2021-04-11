@@ -121,6 +121,7 @@ struct App
     // Loop
     f32  deltaTime;
     bool isRunning;
+    bool enableDebugGroups = false;
 
     // Input
     Input input;

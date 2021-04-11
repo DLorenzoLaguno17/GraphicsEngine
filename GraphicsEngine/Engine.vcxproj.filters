@@ -54,9 +54,6 @@
     <ClCompile Include="Code\assimp.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
-    <ClCompile Include="Code\primitives.cpp">
-      <Filter>Engine</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ThirdParty\imgui-docking\imconfig.h">
@@ -99,9 +96,6 @@
       <Filter>Stb</Filter>
     </ClInclude>
     <ClInclude Include="Code\assimp.h">
-      <Filter>Engine</Filter>
-    </ClInclude>
-    <ClInclude Include="Code\primitives.h">
       <Filter>Engine</Filter>
     </ClInclude>
   </ItemGroup>
