@@ -7,6 +7,8 @@
 #include "platform.h"
 #include <glad/glad.h>
 
+#define BINDING(b) b
+
 typedef glm::vec2  vec2;
 typedef glm::vec3  vec3;
 typedef glm::vec4  vec4;
@@ -109,6 +111,17 @@ struct Program
     VertexShaderLayout  vertexInputLayout;
 };
 
+struct Entity
+{
+    Entity(glm::mat4 worldMatrix, u32 modelIndex, u32 localParamsOffset, u32 localParamsSize)
+        : worldMatrix(worldMatrix), modelIndex(modelIndex), localParamsOffset(localParamsOffset), localParamsSize(localParamsSize) {}
+    
+    glm::mat4   worldMatrix;
+    u32         modelIndex;
+    u32         localParamsOffset;
+    u32         localParamsSize;
+};
+
 enum class Mode
 {
     TexturedQuad,
@@ -137,6 +150,7 @@ struct App
     std::vector<Mesh>     meshes;
     std::vector<Model>    models;
     std::vector<Program>  programs;
+    std::vector<Entity>   entities;
 
     // Texture indices
     u32 diceTexIdx;
@@ -154,6 +168,11 @@ struct App
 
     // Mode
     Mode mode;
+
+    // Buffers
+    GLint uniformBlockAlignment;
+    GLint maxUniformBufferSize;
+    GLuint uniformBufferHandle;
 
     // Embedded geometry (in-editor simple meshes such as
     // a screen filling quad, a cube, a sphere...)

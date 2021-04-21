@@ -120,7 +120,6 @@ u32 LoadProgram(App* app, const char* filepath, const char* programName)
         glGetActiveAttrib(program.handle, i, bufSize, &attributeNameLength, &attributeSize, &attributeType, attributeName);
 
         u8 attributeLocation = glGetAttribLocation(program.handle, attributeName);
-        printf("Location #%d Type: %u Name: %s\n", i, attributeLocation, attributeName);
         program.vertexInputLayout.attributes.push_back({ attributeLocation, (u8)attributeSize });
     }
 
@@ -255,6 +254,11 @@ GLuint FindVAO(Mesh& mesh, u32 submeshIndex, const Program& program)
     return vaoHandle;
 }
 
+u32 Align(u32 value, u32 alignment)
+{
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
 void OnGLError(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
 {
     if (severity == GL_DEBUG_SEVERITY_NOTIFICATION)
@@ -317,6 +321,7 @@ void Init(App* app)
 
     GLint num_extensions;
     glGetIntegerv(GL_NUM_EXTENSIONS, &num_extensions);
+    glEnable(GL_DEPTH_TEST);
 
     // Get OpenGL errors
     if (GL_MAJOR_VERSION > 4 || (GL_MAJOR_VERSION == 4 && GL_MINOR_VERSION >= 3))
@@ -336,6 +341,15 @@ void Init(App* app)
         0, 1, 2,
         0, 2, 3
     };
+
+    // Uniform buffers
+    glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &app->maxUniformBufferSize);
+    glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &app->uniformBlockAlignment);
+
+    glGenBuffers(1, &app->uniformBufferHandle);
+    glBindBuffer(GL_UNIFORM_BUFFER, app->uniformBufferHandle);
+    glBufferData(GL_UNIFORM_BUFFER, app->maxUniformBufferSize, NULL, GL_STREAM_DRAW);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
     // Vertex buffers 
     glGenBuffers(1, &app->embeddedVertices);
@@ -373,6 +387,19 @@ void Init(App* app)
 
     // Load models
     app->model = LoadModel(app, "Patrick/Patrick.obj");
+
+    // Create entities
+    Entity ent = Entity(glm::mat4(1.0), app->model, 0, 0);
+    ent.worldMatrix = glm::translate(ent.worldMatrix, vec3(1.0, 1.0, 5.0));
+    app->entities.push_back(ent);
+
+    Entity ent2 = Entity(glm::mat4(1.0), app->model, 0, 0);
+    ent2.worldMatrix = glm::translate(ent2.worldMatrix, vec3(1.0, 1.0, 2.0));
+    app->entities.push_back(ent2);
+
+    Entity ent3 = Entity(glm::mat4(1.0), app->model, 0, 0);
+    ent3.worldMatrix = glm::translate(ent3.worldMatrix, vec3(1.0, 1.0, -2.0));
+    app->entities.push_back(ent3);
 }
 
 void Gui(App* app)
@@ -388,7 +415,7 @@ void Gui(App* app)
 
 void Update(App* app)
 {
-    // You can handle app->input keyboard/mouse here
+    // Update programs regarding their timestamps
     for (u64 i = 0; i < app->programs.size(); ++i)
     {
         Program& program = app->programs[i];
@@ -403,6 +430,44 @@ void Update(App* app)
             program.lastWriteTimestamp = currentTimestamp;
         }
     }
+
+    glm::mat4 CameraMatrix = glm::lookAt(
+        vec3(4.0f, 5.0f, 6.0f), // the position of your camera, in world space
+        vec3(0.0f),             // where you want to look at, in world space
+        glm::vec3(0, 1, 0)      // probably glm::vec3(0,1,0), but (0,-1,0) would make you looking upside-down, which can be great too
+    );
+
+    // Generates a really hard-to-read matrix, but a normal, standard 4x4 matrix nonetheless
+    glm::mat4 projectionMatrix = glm::perspective(
+        glm::radians(60.0f),    // The vertical Field of View, in radians: the amount of "zoom". Think "camera lens". Usually between 90° (extra wide) and 30° (quite zoomed in)
+        4.0f / 3.0f,            // Aspect Ratio. Depends on the size of your window. Notice that 4/3 == 800/600 == 1280/960, sounds familiar ?
+        0.1f,                   // Near clipping plane. Keep as big as possible, or you'll get precision issues.
+        100.0f                  // Far clipping plane. Keep as little as possible.
+    );
+
+    // Update entities
+    glBindBuffer(GL_UNIFORM_BUFFER, app->uniformBufferHandle);
+    u8* bufferData = (u8*)glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
+    u32 bufferHead = 0;
+
+    for (int i = 0; i < app->entities.size(); ++i)
+    {
+        glm::mat4 worldViewProjectionMatrix = projectionMatrix * CameraMatrix * app->entities[i].worldMatrix;
+
+        bufferHead = Align(bufferHead, app->uniformBlockAlignment);
+        app->entities[i].localParamsOffset = bufferHead;
+
+        memcpy(bufferData + bufferHead, glm::value_ptr(app->entities[i].worldMatrix), sizeof(glm::mat4));
+        bufferHead += sizeof(glm::mat4);
+
+        memcpy(bufferData + bufferHead, glm::value_ptr(worldViewProjectionMatrix), sizeof(glm::mat4));
+        bufferHead += sizeof(glm::mat4);
+
+        app->entities[i].localParamsSize = bufferHead - app->entities[i].localParamsOffset;
+    }
+    
+    glUnmapBuffer(GL_UNIFORM_BUFFER);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
 void Render(App* app)
@@ -449,24 +514,28 @@ void Render(App* app)
             Program& texturedMeshProgram = app->programs[app->texturedMeshProgramIdx];
             glUseProgram(texturedMeshProgram.handle);
 
-            Model& model = app->models[app->model];
-            Mesh& mesh = app->meshes[model.meshIdx];
-
-            for (u32 i = 0; i < mesh.submeshes.size(); ++i)
+            for (int i = 0; i < app->entities.size(); ++i)
             {
-                GLuint vao = FindVAO(mesh, i, texturedMeshProgram);
-                glBindVertexArray(vao);
+                Model& model = app->models[app->entities[i].modelIndex];
+                Mesh& mesh = app->meshes[model.meshIdx];
+                glBindBufferRange(GL_UNIFORM_BUFFER, BINDING(1), app->uniformBufferHandle, app->entities[i].localParamsOffset, app->entities[i].localParamsSize);
 
-                u32 submeshMaterialIdx = model.materialIdx[i];
-                Material& submeshMaterial = app->materials[submeshMaterialIdx];
+                for (u32 j = 0; j < mesh.submeshes.size(); ++j)
+                {
+                    GLuint vao = FindVAO(mesh, j, texturedMeshProgram);
+                    glBindVertexArray(vao);
 
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, app->textures[submeshMaterial.albedoTextureIdx].handle);
-                //glUniform1i(app->programMeshTexture, 0);
+                    u32 submeshMaterialIdx = model.materialIdx[j];
+                    Material& submeshMaterial = app->materials[submeshMaterialIdx];
 
-                // Draw elements
-                Submesh& submesh = mesh.submeshes[i];
-                glDrawElements(GL_TRIANGLES, submesh.indices.size(), GL_UNSIGNED_INT, (void*)(u64)submesh.indexOffset);
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, app->textures[submeshMaterial.albedoTextureIdx].handle);
+                    //glUniform1i(app->programMeshTexture, 0);
+
+                    // Draw elements
+                    Submesh& submesh = mesh.submeshes[j];
+                    glDrawElements(GL_TRIANGLES, submesh.indices.size(), GL_UNSIGNED_INT, (void*)(u64)submesh.indexOffset);
+                }
             }
         }
         break;
