@@ -111,6 +111,29 @@ struct Program
     VertexShaderLayout  vertexInputLayout;
 };
 
+struct Buffer
+{
+    GLuint  handle;
+    GLenum  type;
+    u32     size;
+    u32     head;
+    void*   data; // mapped data
+};
+
+enum LightType
+{
+    LightType_Directional,
+    LightType_Point
+};
+
+struct Light
+{
+    vec3        color;
+    vec3        direction;
+    vec3        position;
+    LightType   type;
+};
+
 struct Entity
 {
     Entity(glm::mat4 worldMatrix, u32 modelIndex, u32 localParamsOffset, u32 localParamsSize)

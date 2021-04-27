@@ -6,6 +6,7 @@
 //
 
 #include "assimp.h"
+#include "buffers.h"
 
 #include <imgui.h>
 #include <stb_image.h>
@@ -254,11 +255,6 @@ GLuint FindVAO(Mesh& mesh, u32 submeshIndex, const Program& program)
     return vaoHandle;
 }
 
-u32 Align(u32 value, u32 alignment)
-{
-    return (value + alignment - 1) & ~(alignment - 1);
-}
-
 void OnGLError(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
 {
     if (severity == GL_DEBUG_SEVERITY_NOTIFICATION)
@@ -390,15 +386,15 @@ void Init(App* app)
 
     // Create entities
     Entity ent = Entity(glm::mat4(1.0), app->model, 0, 0);
-    ent.worldMatrix = glm::translate(ent.worldMatrix, vec3(1.0, 1.0, 5.0));
+    ent.worldMatrix = glm::translate(ent.worldMatrix, vec3(0.0, 1.0, -2.0));
     app->entities.push_back(ent);
 
     Entity ent2 = Entity(glm::mat4(1.0), app->model, 0, 0);
-    ent2.worldMatrix = glm::translate(ent2.worldMatrix, vec3(1.0, 1.0, 2.0));
+    ent2.worldMatrix = glm::translate(ent2.worldMatrix, vec3(5.0, 1.0, -5.0));
     app->entities.push_back(ent2);
 
     Entity ent3 = Entity(glm::mat4(1.0), app->model, 0, 0);
-    ent3.worldMatrix = glm::translate(ent3.worldMatrix, vec3(1.0, 1.0, -2.0));
+    ent3.worldMatrix = glm::translate(ent3.worldMatrix, vec3(-5.0, 1.0, -5.0));
     app->entities.push_back(ent3);
 }
 
@@ -432,8 +428,8 @@ void Update(App* app)
     }
 
     glm::mat4 CameraMatrix = glm::lookAt(
-        vec3(4.0f, 5.0f, 6.0f), // the position of your camera, in world space
-        vec3(0.0f),             // where you want to look at, in world space
+        vec3(0.0f, 2.0f, 7.5f), // the position of your camera, in world space
+        vec3(0.0f, 1.0f, 0.0f), // where you want to look at, in world space
         glm::vec3(0, 1, 0)      // probably glm::vec3(0,1,0), but (0,-1,0) would make you looking upside-down, which can be great too
     );
 
