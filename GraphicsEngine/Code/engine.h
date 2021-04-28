@@ -120,20 +120,6 @@ struct Buffer
     void*   data; // mapped data
 };
 
-enum LightType
-{
-    LightType_Directional,
-    LightType_Point
-};
-
-struct Light
-{
-    vec3        color;
-    vec3        direction;
-    vec3        position;
-    LightType   type;
-};
-
 struct Entity
 {
     Entity(glm::mat4 worldMatrix, u32 modelIndex, u32 localParamsOffset, u32 localParamsSize)
@@ -143,6 +129,23 @@ struct Entity
     u32         modelIndex;
     u32         localParamsOffset;
     u32         localParamsSize;
+};
+
+enum LightType
+{
+    LightType_Directional,
+    LightType_Point
+};
+
+struct Light
+{
+    Light(LightType type, vec3 color, vec3 direction, vec3 position)
+        : type(type), color(color), direction(direction), position(position) {}
+
+    vec3        color;
+    vec3        direction;
+    vec3        position;
+    LightType   type;
 };
 
 enum class Mode
@@ -174,6 +177,7 @@ struct App
     std::vector<Model>    models;
     std::vector<Program>  programs;
     std::vector<Entity>   entities;
+    std::vector<Light>    lights;
 
     // Texture indices
     u32 diceTexIdx;
@@ -192,10 +196,14 @@ struct App
     // Mode
     Mode mode;
 
-    // Buffers
-    GLint uniformBlockAlignment;
+    // Uniform buffer
+    GLint uniformBufferAlignment;
     GLint maxUniformBufferSize;
-    GLuint uniformBufferHandle;
+
+    // Global parameters
+    u32 globalParamsOffset;
+    u32 globalParamsSize;
+    Buffer cbuffer;
 
     // Embedded geometry (in-editor simple meshes such as
     // a screen filling quad, a cube, a sphere...)

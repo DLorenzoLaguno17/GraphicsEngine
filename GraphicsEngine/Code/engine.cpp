@@ -340,12 +340,8 @@ void Init(App* app)
 
     // Uniform buffers
     glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &app->maxUniformBufferSize);
-    glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &app->uniformBlockAlignment);
-
-    glGenBuffers(1, &app->uniformBufferHandle);
-    glBindBuffer(GL_UNIFORM_BUFFER, app->uniformBufferHandle);
-    glBufferData(GL_UNIFORM_BUFFER, app->maxUniformBufferSize, NULL, GL_STREAM_DRAW);
-    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &app->uniformBufferAlignment);
+    app->cbuffer = CreateConstantBuffer(app->maxUniformBufferSize);
 
     // Vertex buffers 
     glGenBuffers(1, &app->embeddedVertices);
@@ -385,9 +381,9 @@ void Init(App* app)
     app->model = LoadModel(app, "Patrick/Patrick.obj");
 
     // Create entities
-    Entity ent = Entity(glm::mat4(1.0), app->model, 0, 0);
-    ent.worldMatrix = glm::translate(ent.worldMatrix, vec3(0.0, 1.0, -2.0));
-    app->entities.push_back(ent);
+    Entity ent1 = Entity(glm::mat4(1.0), app->model, 0, 0);
+    ent1.worldMatrix = glm::translate(ent1.worldMatrix, vec3(0.0, 1.0, -2.0));
+    app->entities.push_back(ent1);
 
     Entity ent2 = Entity(glm::mat4(1.0), app->model, 0, 0);
     ent2.worldMatrix = glm::translate(ent2.worldMatrix, vec3(5.0, 1.0, -5.0));
@@ -396,6 +392,16 @@ void Init(App* app)
     Entity ent3 = Entity(glm::mat4(1.0), app->model, 0, 0);
     ent3.worldMatrix = glm::translate(ent3.worldMatrix, vec3(-5.0, 1.0, -5.0));
     app->entities.push_back(ent3);
+
+    // Create lights
+    Light light1 = Light(LightType::LightType_Directional, vec3(1.0, 1.0, 1.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 5.0, 0.0));
+    app->lights.push_back(light1);
+
+    Light light2 = Light(LightType::LightType_Point, vec3(0.0, 0.0, 1.0), vec3(50.0, 0.0, 0.0), vec3(-1.0, 1.0, 0.0));
+    app->lights.push_back(light2);
+
+    Light light3 = Light(LightType::LightType_Point, vec3(1.0, 0.0, 1.0), vec3(-50.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0));
+    app->lights.push_back(light3);
 }
 
 void Gui(App* app)
@@ -427,8 +433,10 @@ void Update(App* app)
         }
     }
 
-    glm::mat4 CameraMatrix = glm::lookAt(
-        vec3(0.0f, 2.0f, 7.5f), // the position of your camera, in world space
+    vec3 cameraPos = vec3(0.0f, 2.0f, 7.5f);
+
+    glm::mat4 viewMatrix = glm::lookAt(
+        cameraPos,              // the position of your camera, in world space
         vec3(0.0f, 1.0f, 0.0f), // where you want to look at, in world space
         glm::vec3(0, 1, 0)      // probably glm::vec3(0,1,0), but (0,-1,0) would make you looking upside-down, which can be great too
     );
@@ -441,29 +449,42 @@ void Update(App* app)
         100.0f                  // Far clipping plane. Keep as little as possible.
     );
 
-    // Update entities
-    glBindBuffer(GL_UNIFORM_BUFFER, app->uniformBufferHandle);
-    u8* bufferData = (u8*)glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
-    u32 bufferHead = 0;
+    // Global parameters
+    MapBuffer(app->cbuffer, GL_WRITE_ONLY);
+    app->globalParamsOffset = app->cbuffer.head;
 
-    for (int i = 0; i < app->entities.size(); ++i)
+    PushVec3(app->cbuffer, cameraPos);
+    PushUInt(app->cbuffer, app->lights.size());
+
+    for (u32 i = 0; i < app->lights.size(); ++i)
     {
-        glm::mat4 worldViewProjectionMatrix = projectionMatrix * CameraMatrix * app->entities[i].worldMatrix;
+        AlignHead(app->cbuffer, sizeof(vec4));
 
-        bufferHead = Align(bufferHead, app->uniformBlockAlignment);
-        app->entities[i].localParamsOffset = bufferHead;
-
-        memcpy(bufferData + bufferHead, glm::value_ptr(app->entities[i].worldMatrix), sizeof(glm::mat4));
-        bufferHead += sizeof(glm::mat4);
-
-        memcpy(bufferData + bufferHead, glm::value_ptr(worldViewProjectionMatrix), sizeof(glm::mat4));
-        bufferHead += sizeof(glm::mat4);
-
-        app->entities[i].localParamsSize = bufferHead - app->entities[i].localParamsOffset;
+        Light& light = app->lights[i];
+        PushUInt(app->cbuffer, light.type);
+        PushVec3(app->cbuffer, light.color);
+        PushVec3(app->cbuffer, light.direction);
+        PushVec3(app->cbuffer, light.position);
     }
-    
-    glUnmapBuffer(GL_UNIFORM_BUFFER);
-    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+    app->globalParamsSize = app->cbuffer.head - app->globalParamsOffset;
+
+    // Local parameters
+    for (u32 i = 0; i < app->entities.size(); ++i)
+    {
+        AlignHead(app->cbuffer, app->uniformBufferAlignment);
+
+        Entity&     entity = app->entities[i];
+        glm::mat4   world = entity.worldMatrix;
+        glm::mat4   worldViewProjection = projectionMatrix * viewMatrix * world;
+
+        entity.localParamsOffset = app->cbuffer.head;
+        PushMat4(app->cbuffer, world);
+        PushMat4(app->cbuffer, worldViewProjection);
+        entity.localParamsSize = app->cbuffer.head - entity.localParamsOffset;
+    }
+
+    UnmapBuffer(app->cbuffer);
 }
 
 void Render(App* app)
@@ -514,7 +535,9 @@ void Render(App* app)
             {
                 Model& model = app->models[app->entities[i].modelIndex];
                 Mesh& mesh = app->meshes[model.meshIdx];
-                glBindBufferRange(GL_UNIFORM_BUFFER, BINDING(1), app->uniformBufferHandle, app->entities[i].localParamsOffset, app->entities[i].localParamsSize);
+
+                glBindBufferRange(GL_UNIFORM_BUFFER, BINDING(0), app->cbuffer.handle, app->globalParamsOffset, app->globalParamsSize);
+                glBindBufferRange(GL_UNIFORM_BUFFER, BINDING(1), app->cbuffer.handle, app->entities[i].localParamsOffset, app->entities[i].localParamsSize);
 
                 for (u32 j = 0; j < mesh.submeshes.size(); ++j)
                 {
