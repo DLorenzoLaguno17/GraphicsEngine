@@ -397,10 +397,10 @@ void Init(App* app)
     Light light1 = Light(LightType::LightType_Directional, vec3(1.0, 1.0, 1.0), vec3(1.0, 1.0, 0.0), vec3(0.0, 10.0, 0.0));
     app->lights.push_back(light1);
 
-    Light light2 = Light(LightType::LightType_Point, vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
+    Light light2 = Light(LightType::LightType_Point, vec3(0.0, 1.0, 0.0), vec3(2.0, 2.0, 0.0), vec3(0.0, 0.0, 0.0));
     app->lights.push_back(light2);
 
-    Light light3 = Light(LightType::LightType_Point, vec3(1.0, 0.0, 0.0), vec3(-1.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
+    Light light3 = Light(LightType::LightType_Point, vec3(1.0, 0.0, 0.0), vec3(-2.0, -2.0, 0.0), vec3(0.0, 0.0, 0.0));
     app->lights.push_back(light3);
 }
 
