@@ -46,10 +46,10 @@ layout(location = 2) in vec2 aTexCoord;
 
 struct Light
 {
-	unsigned int type;
 	vec3 color;
 	vec3 direction;
 	vec3 position;
+	unsigned int type;
 };
 
 layout(binding = 0, std140) uniform GlobalParams
@@ -77,22 +77,16 @@ void main()
 	vNormal = vec3(uWorldMatrix * vec4(aNormal, 0.0));
 	vViewDir = uCameraPosition - vPosition;
 	gl_Position = uWorldViewProjectionMatrix * vec4(aPosition, 1.0);
-
-	//float clippingScale = 5.0;
-
-	//gl_Position = vec4(aPosition, clippingScale);
-
-	//gl_Position.z = -gl_Position.z;
 }
 
 #elif defined(FRAGMENT) ///////////////////////////////////////////////
 
 struct Light
 {
-	unsigned int type;
 	vec3 color;
 	vec3 direction;
 	vec3 position;
+	unsigned int type;
 };
 
 in vec2 vTexCoord;
@@ -112,8 +106,43 @@ layout(binding = 0, std140) uniform GlobalParams
 layout(location = 0) out vec4 oColor;
 
 void main()
-{
-	oColor = texture(uTexture, vTexCoord);
+{	
+	// Mat parameters
+    vec3 specular = vec3(1.0);	// color reflected by mat
+    float shininess = 40.0;		// how strong specular reflections are (more shininess harder and smaller spec)
+	vec4 albedo = texture(uTexture, vTexCoord);
+
+	// Ambient
+    float ambientIntensity = 0.25;
+    vec3 ambientColor = albedo.xyz * ambientIntensity;
+
+    vec3 N = normalize(vNormal);		// normal
+	vec3 V = normalize(-uViewDir.xyz);	// direction from pixel to camera
+
+	vec3 diffuseColor;
+	vec3 specularColor;
+
+	for(int i = 0; i < uLightCount; ++i)
+	{
+	    float attenuation = 1.0f;
+		
+		// If we have a point light, attenuate according to distance
+		if(uLight[i].type == 1)
+			attenuation = 1.0 / length(uLight[i].position - vPosition);
+	        
+	    vec3 L = normalize(uLight[i].direction - uViewDir.xyz); // Light direction 
+	    vec3 R = reflect(-L, N);								// reflected vector
+	    
+	    // Diffuse
+	    float diffuseIntensity = max(0.0, dot(N, L));
+	    diffuseColor += attenuation * albedo.xyz * uLight[i].color * diffuseIntensity;
+	    
+	    // Specular
+	    float specularIntensity = pow(max(dot(R, V), 0.0), shininess);
+	    specularColor += attenuation * specular * uLight[i].color * specularIntensity;
+	}
+
+	oColor = vec4(ambientColor + diffuseColor + specularColor, 1.0);
 }
 
 #endif

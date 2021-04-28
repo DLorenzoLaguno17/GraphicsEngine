@@ -394,13 +394,13 @@ void Init(App* app)
     app->entities.push_back(ent3);
 
     // Create lights
-    Light light1 = Light(LightType::LightType_Directional, vec3(1.0, 1.0, 1.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 5.0, 0.0));
+    Light light1 = Light(LightType::LightType_Directional, vec3(1.0, 1.0, 1.0), vec3(1.0, 1.0, 0.0), vec3(0.0, 10.0, 0.0));
     app->lights.push_back(light1);
 
-    Light light2 = Light(LightType::LightType_Point, vec3(0.0, 0.0, 1.0), vec3(50.0, 0.0, 0.0), vec3(-1.0, 1.0, 0.0));
+    Light light2 = Light(LightType::LightType_Point, vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
     app->lights.push_back(light2);
 
-    Light light3 = Light(LightType::LightType_Point, vec3(1.0, 0.0, 1.0), vec3(-50.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0));
+    Light light3 = Light(LightType::LightType_Point, vec3(1.0, 0.0, 0.0), vec3(-1.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
     app->lights.push_back(light3);
 }
 
@@ -461,10 +461,10 @@ void Update(App* app)
         AlignHead(app->cbuffer, sizeof(vec4));
 
         Light& light = app->lights[i];
-        PushUInt(app->cbuffer, light.type);
         PushVec3(app->cbuffer, light.color);
         PushVec3(app->cbuffer, light.direction);
         PushVec3(app->cbuffer, light.position);
+        PushUInt(app->cbuffer, light.type);
     }
 
     app->globalParamsSize = app->cbuffer.head - app->globalParamsOffset;
